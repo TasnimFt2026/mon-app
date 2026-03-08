@@ -1,4 +1,30 @@
-.DS_Store
-.vscode/
-*.log
+# Binaires
+k3s
+kubectl
+minikube
+
+# Node modules (si vous aviez du Node.js)
 node_modules/
+
+# Logs
+*.log
+logs/
+
+# Système
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+*.tar
+*.tar.gz
+
+# Kubernetes
+*.kubeconfig
+
+# Secrets locaux
+.env
+secrets/
