@@ -4,6 +4,9 @@ FROM nginx:alpine AS builder
 # Stage 2: Production
 FROM nginx:alpine
 
+# Mettre à jour les packages pour corriger les CVE (zlib, libpng)
+RUN apk update && apk upgrade --no-cache
+
 # Copier la configuration Nginx personnalisée
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
