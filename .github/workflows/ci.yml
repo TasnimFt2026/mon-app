@@ -1,0 +1,130 @@
+name: CI/CD Pipeline
+
+# Quand déclencher ce workflow
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+# Variables d'environnement globales
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build, Scan and Push Docker Image
+    runs-on: ubuntu-latest
+    
+    # Permissions nécessaires
+    permissions:
+      contents: write
+      packages: write
+      
+    steps:
+      # ═══════════════════════════════════════════════════════
+      # STEP 1 : Checkout du code
+      # ═══════════════════════════════════════════════════════
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      # ═══════════════════════════════════════════════════════
+      # STEP 2 : Setup Docker Buildx
+      # ═══════════════════════════════════════════════════════
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      # ═══════════════════════════════════════════════════════
+      # STEP 3 : Login GitHub Container Registry
+      # ═══════════════════════════════════════════════════════
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+      
+      # ═══════════════════════════════════════════════════════
+      # STEP 4 : Extraire metadata (tags, labels)
+      # ═══════════════════════════════════════════════════════
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      # ═══════════════════════════════════════════════════════
+      # STEP 5 : Build l'image Docker
+      # ═══════════════════════════════════════════════════════
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      # ═══════════════════════════════════════════════════════
+      # STEP 6 : Scan de sécurité avec Trivy
+      # ═══════════════════════════════════════════════════════
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+      
+      # ═══════════════════════════════════════════════════════
+      # STEP 7 : Push l'image vers GHCR
+      # ═══════════════════════════════════════════════════════
+      - name: Push Docker image to GHCR
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      # ═══════════════════════════════════════════════════════
+      # STEP 8 : Mettre à jour les manifests Kubernetes
+      # ═══════════════════════════════════════════════════════
+      - name: Update Kubernetes manifests
+        run: |
+          # Extraire le SHA court du commit
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          
+          # Mettre à jour deployment.yaml avec la nouvelle image
+          sed -i "s|image: mon-app:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main-${SHORT_SHA}|g" kubernetes/deployment.yaml
+          
+          # Afficher le changement
+          echo "Updated deployment.yaml:"
+          grep "image:" kubernetes/deployment.yaml
+      
+      # ═══════════════════════════════════════════════════════
+      # STEP 9 : Commit et push des manifests mis à jour
+      # ═══════════════════════════════════════════════════════
+      - name: Commit and push updated manifests
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          git add kubernetes/deployment.yaml
+          git diff --staged --quiet || git commit -m "ci: Update image to ${{ github.sha }}"
+          git push
