@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: mon-app
-        image: mon-app:1.0
+        image: ghcr.io/TasnimFt2026/mon-app:main-f0d4789
         imagePullPolicy: Never
         ports:
         - containerPort: 80
