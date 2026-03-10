@@ -83,9 +83,9 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/tasnimft2026/mon-app:latest
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/mon-app:latest | tr '[:upper:]' '[:lower:]'
           format: 'table'
-          exit-code: '0'
+          exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
