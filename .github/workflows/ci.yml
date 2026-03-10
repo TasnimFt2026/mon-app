@@ -80,16 +80,22 @@ jobs:
       # ═══════════════════════════════════════════════════════
       # STEP 6 : Scan de sécurité avec Trivy
       # ═══════════════════════════════════════════════════════
+      # Ajouter cette step AVANT le scan Trivy
+      - name: Lowercase username
+        id: lowercase
+        run: echo "owner=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+       # Puis modifier le scan Trivy
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/mon-app:latest | tr '[:upper:]' '[:lower:]'
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
-          scanners: vuln
+         image-ref: ${{ env.REGISTRY }}/${{ steps.lowercase.outputs.owner }}/mon-app:latest
+         format: 'table'
+         exit-code: '1'
+         ignore-unfixed: true
+         vuln-type: 'os,library'
+         severity: 'CRITICAL,HIGH'
+         scanners: vuln
       
       # ═══════════════════════════════════════════════════════
       # STEP 7 : Push l'image vers GHCR
