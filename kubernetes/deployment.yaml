@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: mon-app
-        image: ghcr.io/tasnimft2026/mon-app:latest
+        image: ghcr.io/tasnimft2026/mon-app:main-ba22b2d
         imagePullPolicy: Always
         ports:
         - containerPort: 80
