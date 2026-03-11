@@ -115,17 +115,12 @@ jobs:
       # ═══════════════════════════════════════════════════════
       - name: Update Kubernetes manifests
         run: |
-          # Extraire le SHA court du commit
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-    
-          # Convertir le owner en lowercase
-          OWNER_LOWER=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')
-    
-          # Mettre à jour deployment.yaml avec la nouvelle image
-          sed -i "s|image: ghcr.io/.*/mon-app:.*|image: ${{ env.REGISTRY }}/${OWNER_LOWER}/mon-app:main-${SHORT_SHA}|g" kubernetes/deployment.yaml
-    
-          # Afficher le changement
-          echo "Updated deployment.yaml:"
+          NEW_IMAGE="ghcr.io/tasnimft2026/mon-app:main-${SHORT_SHA}"
+          
+          sed -i "s|image: ghcr.io/tasnimft2026/mon-app:.*|image: ${NEW_IMAGE}|g" kubernetes/deployment.yaml
+          
+          echo "✅ Image mise à jour :"
           grep "image:" kubernetes/deployment.yaml
       
       # ═══════════════════════════════════════════════════════
