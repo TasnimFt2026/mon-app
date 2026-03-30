@@ -1,0 +1,82 @@
+# Politique 1 : Bloquer tout le trafic entrant par défaut
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: mon-app
+spec:
+  podSelector: {}      # s'applique à TOUS les pods du namespace
+  policyTypes:
+  - Ingress            # bloque tout trafic entrant
+
+---
+# Politique 2 : Autoriser uniquement le trafic HTTP vers mon-app
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-http-mon-app
+  namespace: mon-app
+spec:
+  podSelector:
+    matchLabels:
+      app: mon-app     # s'applique aux pods avec label app=mon-app
+  policyTypes:
+  - Ingress
+  ingress:
+  - ports:
+    - protocol: TCP
+      port: 80         # autorise uniquement le port 80
+
+---
+# Politique 3 : Autoriser le trafic DNS (nécessaire pour résolution de noms)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: mon-app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+---
+# Bloquer tout le trafic sortant par défaut
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: mon-app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+
+---
+# Autoriser le trafic sortant vers Internet (pour pull images, etc.)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-egress
+  namespace: mon-app
+spec:
+  podSelector:
+    matchLabels:
+      app: mon-app
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector: {}
+  - to:
+    - podSelector: {}
+  - ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80

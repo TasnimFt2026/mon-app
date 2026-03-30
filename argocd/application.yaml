@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mon-app
+  namespace: argocd
+  # Finalizer pour nettoyer les ressources lors de la suppression
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  # Projet Argo CD (default = projet par défaut)
+  project: default
+  
+  # SOURCE : Où est le code (Git)
+  source:
+    repoURL: https://github.com/TasnimFt2026/mon-app.git
+    targetRevision: main
+    path: kubernetes
+  
+  # DESTINATION : Où déployer (Kubernetes)
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mon-app
+  
+  # SYNCHRONISATION
+  syncPolicy:
+    automated:
+      # Auto-sync : Argo CD synchronise automatiquement les changements
+      prune: true       # Supprime les ressources qui ne sont plus dans Git
+      selfHeal: true    # Répare automatiquement les modifications manuelles
+      allowEmpty: false # Ne synchronise pas si le dossier est vide
+    
+    syncOptions:
+      - CreateNamespace=true  # Crée le namespace s'il n'existe pas
+      - PruneLast=true        # Supprime les ressources en dernier
+    
+    retry:
+      limit: 5                # Réessaie 5 fois en cas d'échec
+      backoff:
+        duration: 5s          # Attend 5s entre chaque tentative
+        factor: 2             # Double le délai à chaque fois
+        maxDuration: 3m       # Maximum 3 minutes d'attente
