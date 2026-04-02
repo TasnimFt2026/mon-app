@@ -1,16 +1,20 @@
+# ══════════════════════════════════════════════════════════
 # Politique 1 : Bloquer tout le trafic entrant par défaut
+# ══════════════════════════════════════════════════════════
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: default-deny-ingress
   namespace: mon-app
 spec:
-  podSelector: {}      # s'applique à TOUS les pods du namespace
+  podSelector: {}
   policyTypes:
-  - Ingress            # bloque tout trafic entrant
+  - Ingress
 
 ---
-# Politique 2 : Autoriser uniquement le trafic HTTP vers mon-app
+# ══════════════════════════════════════════════════════════
+# Politique 2 : Autoriser HTTP + Linkerd vers mon-app
+# ══════════════════════════════════════════════════════════
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -19,16 +23,95 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: mon-app     # s'applique aux pods avec label app=mon-app
+      app: mon-app
   policyTypes:
   - Ingress
   ingress:
   - ports:
     - protocol: TCP
-      port: 80         # autorise uniquement le port 80
+      port: 80       # HTTP app
+    - protocol: TCP
+      port: 4191     # Linkerd health check
+    - protocol: TCP
+      port: 4143     # Linkerd proxy traffic
+    - protocol: TCP
+      port: 4140     # Linkerd outbound proxy
 
 ---
-# Politique 3 : Autoriser le trafic DNS (nécessaire pour résolution de noms)
+# ══════════════════════════════════════════════════════════
+# Politique 3 : Autoriser trafic depuis namespace argocd
+# (pour que Argo CD puisse vérifier l'état des pods)
+# ══════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-argocd-ingress
+  namespace: mon-app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: argocd
+
+---
+# ══════════════════════════════════════════════════════════
+# Politique 4 : Autoriser trafic depuis kube-system
+# (pour health probes de Kubernetes)
+# ══════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kube-system-ingress
+  namespace: mon-app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+
+---
+# ══════════════════════════════════════════════════════════
+# Politique 5 : Autoriser trafic interne entre pods mon-app
+# ══════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: mon-app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector: {}
+
+---
+# ══════════════════════════════════════════════════════════
+# Politique 6 : Bloquer tout le trafic sortant par défaut
+# ══════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: mon-app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+
+---
+# ══════════════════════════════════════════════════════════
+# Politique 7 : Autoriser DNS (obligatoire)
+# ══════════════════════════════════════════════════════════
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -46,19 +129,10 @@ spec:
       port: 53
 
 ---
-# Bloquer tout le trafic sortant par défaut
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: default-deny-egress
-  namespace: mon-app
-spec:
-  podSelector: {}
-  policyTypes:
-  - Egress
-
----
-# Autoriser le trafic sortant vers Internet (pour pull images, etc.)
+# ══════════════════════════════════════════════════════════
+# Politique 8 : Autoriser trafic sortant externe
+# (HTTPS vers GHCR, GitHub, etc.)
+# ══════════════════════════════════════════════════════════
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -71,12 +145,52 @@ spec:
   policyTypes:
   - Egress
   egress:
-  - to:
-    - namespaceSelector: {}
-  - to:
-    - podSelector: {}
   - ports:
     - protocol: TCP
-      port: 443
+      port: 443    # HTTPS
     - protocol: TCP
-      port: 80
+      port: 80     # HTTP
+
+---
+# ══════════════════════════════════════════════════════════
+# Politique 9 : Autoriser Linkerd egress (control plane)
+# ══════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-linkerd-egress
+  namespace: mon-app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: linkerd
+  - ports:
+    - protocol: TCP
+      port: 4191
+    - protocol: TCP
+      port: 4143
+    - protocol: TCP
+      port: 4140
+    - protocol: TCP
+      port: 8086
+
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kubernetes-dashboard
+  namespace: mon-app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kubernetes-dashboard
