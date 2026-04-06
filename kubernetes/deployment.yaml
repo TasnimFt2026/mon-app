@@ -19,7 +19,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: mon-app
-          image: ghcr.io/tasnimft2026/mon-app:main-297fc13
+          image: ghcr.io/tasnimft2026/mon-app:main-32ccb6a
           imagePullPolicy: Always
 
           ports:
