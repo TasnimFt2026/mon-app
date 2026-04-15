@@ -1,0 +1,64 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mon-app-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus-stack
+spec:
+  groups:
+  - name: mon-app.rules
+    rules:
+
+    # Alerte pod down
+    - alert: PodDown
+      expr: kube_pod_status_ready{namespace="mon-app",condition="true"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod {{ $labels.pod }} est down"
+        description: "Le pod {{ $labels.pod }} n'est pas Ready depuis 1 minute"
+
+    # Alerte CPU élevé
+    - alert: HighCPU
+      expr: |
+        100 * (1 - avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 80
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "CPU élevé sur {{ $labels.instance }}"
+        description: "CPU > 80% depuis 5 minutes"
+
+    # Alerte RAM élevée
+    - alert: HighMemory
+      expr: |
+        (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 80
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "RAM élevée sur {{ $labels.instance }}"
+        description: "RAM > 80% depuis 5 minutes"
+
+    # Alerte disque plein
+    - alert: DiskSpaceLow
+      expr: |
+        (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 > 75
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Disque presque plein sur {{ $labels.instance }}"
+        description: "Espace disque > 75% utilisé"
+
+    # Alerte pod en CrashLoopBackOff
+    - alert: PodCrashLooping
+      expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod {{ $labels.pod }} crashe en boucle"
+        description: "Le pod redémarre trop souvent"

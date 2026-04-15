@@ -32,3 +32,5 @@ sealed-secrets-master-key-backup.yaml
 sealed-secret.yaml
 kubeseal
 secret-temp.yaml
+
+LICENSE
