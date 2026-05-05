@@ -1,6 +1,13 @@
-# ══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════════
+# NetworkPolicies — Projet mon-app
+# Namespaces couverts : mon-app, argocd, monitoring
+# ══════════════════════════════════════════════════════════════════════
+
+# ──────────────────────────────────────────────────────────────────────
+# NAMESPACE : mon-app
+# ──────────────────────────────────────────────────────────────────────
+
 # Politique 1 : Bloquer tout le trafic entrant par défaut
-# ══════════════════════════════════════════════════════════
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -12,92 +19,7 @@ spec:
   - Ingress
 
 ---
-# ══════════════════════════════════════════════════════════
-# Politique 2 : Autoriser HTTP + Linkerd vers mon-app
-# ══════════════════════════════════════════════════════════
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-http-mon-app
-  namespace: mon-app
-spec:
-  podSelector:
-    matchLabels:
-      app: mon-app
-  policyTypes:
-  - Ingress
-  ingress:
-  - ports:
-    - protocol: TCP
-      port: 80       # HTTP app
-    - protocol: TCP
-      port: 4191     # Linkerd health check
-    - protocol: TCP
-      port: 4143     # Linkerd proxy traffic
-    - protocol: TCP
-      port: 4140     # Linkerd outbound proxy
-
----
-# ══════════════════════════════════════════════════════════
-# Politique 3 : Autoriser trafic depuis namespace argocd
-# (pour que Argo CD puisse vérifier l'état des pods)
-# ══════════════════════════════════════════════════════════
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-argocd-ingress
-  namespace: mon-app
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: argocd
-
----
-# ══════════════════════════════════════════════════════════
-# Politique 4 : Autoriser trafic depuis kube-system
-# (pour health probes de Kubernetes)
-# ══════════════════════════════════════════════════════════
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-kube-system-ingress
-  namespace: mon-app
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: kube-system
-
----
-# ══════════════════════════════════════════════════════════
-# Politique 5 : Autoriser trafic interne entre pods mon-app
-# ══════════════════════════════════════════════════════════
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-same-namespace
-  namespace: mon-app
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - podSelector: {}
-
----
-# ══════════════════════════════════════════════════════════
-# Politique 6 : Bloquer tout le trafic sortant par défaut
-# ══════════════════════════════════════════════════════════
+# Politique 2 : Bloquer tout le trafic sortant par défaut
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -109,9 +31,7 @@ spec:
   - Egress
 
 ---
-# ══════════════════════════════════════════════════════════
-# Politique 7 : Autoriser DNS (obligatoire)
-# ══════════════════════════════════════════════════════════
+# Politique 3 : Autoriser DNS (obligatoire pour toute résolution de nom)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -129,32 +49,124 @@ spec:
       port: 53
 
 ---
-# ══════════════════════════════════════════════════════════
-# Politique 8 : Autoriser trafic sortant externe
-# (HTTPS vers GHCR, GitHub, etc.)
-# ══════════════════════════════════════════════════════════
+# Politique 4 : Autoriser le trafic HTTP entrant + ports Linkerd vers mon-app
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-external-egress
+  name: allow-http-mon-app
   namespace: mon-app
 spec:
   podSelector:
     matchLabels:
       app: mon-app
   policyTypes:
-  - Egress
-  egress:
+  - Ingress
+  ingress:
   - ports:
     - protocol: TCP
-      port: 443    # HTTPS
+      port: 80       # HTTP application
     - protocol: TCP
-      port: 80     # HTTP
+      port: 4191     # Linkerd health check
+    - protocol: TCP
+      port: 4143     # Linkerd proxy (inbound)
+    - protocol: TCP
+      port: 4140     # Linkerd proxy (outbound)
 
 ---
-# ══════════════════════════════════════════════════════════
-# Politique 9 : Autoriser Linkerd egress (control plane)
-# ══════════════════════════════════════════════════════════
+# Politique 5 : Autoriser le trafic interne entre pods du même namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: mon-app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector: {}
+
+---
+# Politique 6 : Autoriser le trafic entrant depuis ArgoCD
+# (vérification de l'état des pods, health checks)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-argocd-ingress
+  namespace: mon-app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: argocd
+
+---
+# Politique 7 : Autoriser le trafic entrant depuis kube-system
+# (health probes kubelet, metrics-server)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kube-system-ingress
+  namespace: mon-app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+
+---
+# Politique 8 : Autoriser le trafic entrant depuis monitoring
+# (scraping Prometheus des métriques de mon-app)
+# NOUVEAU — sans cette politique Prometheus ne peut pas collecter les métriques
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-ingress
+  namespace: mon-app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080     # port metrics de mon-app (à adapter si différent)
+    - protocol: TCP
+      port: 9090     # port metrics Prometheus alternatif
+
+---
+# Politique 9 : Autoriser le trafic entrant depuis kubernetes-dashboard
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kubernetes-dashboard-ingress
+  namespace: mon-app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kubernetes-dashboard
+
+---
+# Politique 10 : Autoriser le trafic sortant vers Linkerd (control plane)
+# CORRIGÉE — to et ports sont maintenant combinés dans la même règle
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -169,33 +181,96 @@ spec:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: linkerd
-  - ports:
+    ports:
     - protocol: TCP
-      port: 4191
+      port: 4191     # Linkerd health check / admin
     - protocol: TCP
-      port: 4143
+      port: 4143     # Linkerd proxy (inbound)
     - protocol: TCP
-      port: 4140
+      port: 4140     # Linkerd proxy (outbound)
     - protocol: TCP
-      port: 8086
+      port: 8086     # Linkerd tap / diagnostics
 
-
+---
+# Politique 11 : Autoriser le trafic sortant vers ArgoCD
+# NOUVEAU — corrige l'erreur "no route to host" sur port 8081
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-kubernetes-dashboard
+  name: allow-egress-to-argocd
   namespace: mon-app
 spec:
   podSelector: {}
   policyTypes:
-  - Ingress
-  ingress:
-  - from:
+  - Egress
+  egress:
+  - to:
     - namespaceSelector:
         matchLabels:
-          kubernetes.io/metadata.name: kubernetes-dashboard
+          kubernetes.io/metadata.name: argocd
+    ports:
+    - protocol: TCP
+      port: 8081     # argocd-repo-server
+    - protocol: TCP
+      port: 8082     # argocd-server metrics
+    - protocol: TCP
+      port: 443      # HTTPS ArgoCD API
 
+---
+# Politique 12 : Autoriser le trafic HTTPS sortant externe
+# (pull d'images GHCR, GitHub, registries)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-egress
+  namespace: mon-app
+spec:
+  podSelector:
+    matchLabels:
+      app: mon-app
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - protocol: TCP
+      port: 443      # HTTPS
+    - protocol: TCP
+      port: 80       # HTTP (à restreindre si inutile)
 
+---
+# ──────────────────────────────────────────────────────────────────────
+# NAMESPACE : argocd
+# NOUVEAU — ArgoCD n'avait aucune politique, tout était ouvert par défaut
+# ──────────────────────────────────────────────────────────────────────
+
+# Politique 13 : Autoriser tout le trafic interne ArgoCD
+# ArgoCD a besoin de communiquer librement entre ses composants
+# (server, repo-server, application-controller, dex, redis, notifications)
+# et vers l'API Kubernetes, les repos Git, et les clusters gérés
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-argocd-internal
+  namespace: argocd
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - {}
+  egress:
+  - {}
+
+---
+# ──────────────────────────────────────────────────────────────────────
+# NAMESPACE : monitoring
+# ──────────────────────────────────────────────────────────────────────
+
+# Politique 14 : Autoriser tout le trafic dans monitoring
+# Prometheus, Grafana, Alertmanager, node-exporter, kube-state-metrics
+# ont besoin de se joindre librement et de scraper tous les namespaces
+# NOTE : à affiner en production avec des règles par composant
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -210,26 +285,3 @@ spec:
   - {}
   egress:
   - {}
-
-
-
-
-#apiVersion: networking.k8s.io/v1
-#kind: NetworkPolicy
-#metadata:
-#  name: allow-grafana-to-loki
-#  namespace: monitoring
-#spec:
-#  podSelector:
-#    matchLabels:
-#      app: loki
-#  policyTypes:
-#  - Ingress
-#  ingress:
-#  - from:
-#    - podSelector:
-#        matchLabels:
-#          app.kubernetes.io/name: grafana
-#    ports:
-#    - protocol: TCP
-#      port: 3100
